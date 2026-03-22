@@ -212,10 +212,10 @@ __marimo__/
 
 # Project data (large files)
 #data/real/
-#data/generated/
+data/generated/
 data/features/
 
 # Spectral analysis additions
-data/
+#data/
 *.py[cod]
 .venv/

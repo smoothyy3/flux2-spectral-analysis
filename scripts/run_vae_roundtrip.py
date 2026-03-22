@@ -90,7 +90,8 @@ def load_vae() -> torch.nn.Module:
             subfolder="vae",
             torch_dtype=torch.bfloat16,
         )
-        vae = vae.to("cuda")
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        vae = vae.to(device)
         vae.eval()
         print("  VAE loaded (subfolder route).")
         return vae
@@ -102,7 +103,7 @@ def load_vae() -> torch.nn.Module:
     from diffusers import Flux2KleinPipeline
 
     pipe = Flux2KleinPipeline.from_pretrained(MODEL_ID, torch_dtype=torch.bfloat16)
-    vae = pipe.vae.to("cuda")
+    vae = pipe.vae.to(device)
     vae.eval()
 
     _OTHER_COMPONENTS = (
@@ -120,7 +121,6 @@ def load_vae() -> torch.nn.Module:
             delattr(pipe, attr)
     del pipe
     gc.collect()
-    torch.cuda.empty_cache()
 
     print("  VAE loaded (full-pipeline route; other components freed).")
     return vae
@@ -150,7 +150,7 @@ def pil_to_bfloat16_tensor(img: Image.Image) -> torch.Tensor:
     arr = np.array(img.convert("RGB"), dtype=np.float32) / 255.0  # [0, 1]
     arr = (arr - 0.5) / 0.5  # [-1, 1]
     tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0)  # (1,3,H,W)
-    return tensor.to(device="cuda", dtype=torch.bfloat16)
+    return tensor.to(device="mps", dtype=torch.bfloat16)
 
 
 def tensor_to_pil(tensor: torch.Tensor) -> Image.Image:

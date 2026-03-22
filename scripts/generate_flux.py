@@ -7,13 +7,13 @@ All outputs are 1024x1024 PNGs saved to data/generated/.
 
 import torch
 from pathlib import Path
-from diffusers import FluxPipeline
+from diffusers import Flux2KleinPipeline
 from tqdm import tqdm
 
-OUTPUT_DIR = Path(__file__).parent.parent / "data" / "generated"
+OUTPUT_DIR = Path(__file__).parent.parent / "data" / "generated" / "klein_4b_distilled"
 RESOLUTION = 1024
-NUM_INFERENCE_STEPS = 30
-GUIDANCE_SCALE = 3.5
+NUM_INFERENCE_STEPS = 4
+GUIDANCE_SCALE = 1.0
 
 # Framing suffix applied to every prompt for consistent FFHQ-like composition
 FRAMING = (
@@ -23,26 +23,33 @@ FRAMING = (
 
 # 20 diverse face prompts covering age, gender, ethnicity, lighting, expression
 PROMPTS = [
-    "young woman in her 20s with long dark hair, neutral expression, studio lighting",
-    "elderly man in his 70s with white beard and wrinkles, warm smile, soft natural light",
-    "teenage boy around 16 with freckles and messy brown hair, slight grin, overcast daylight",
-    "middle-aged woman in her 40s with short blonde hair, confident expression, ring light",
-    "young man with glasses and neat short hair, serious expression, office lighting",
-    "elderly woman in her 80s with silver hair pulled back, gentle smile, window light",
-    "man in his 30s with thick dark beard and brown eyes, neutral expression, golden hour light",
-    "young woman with dark skin and natural afro hair, joyful smile, bright studio lighting",
-    "East Asian man in his 50s with salt-and-pepper hair, calm expression, diffused light",
-    "South Asian woman in her 30s with long black hair, subtle smile, natural daylight",
-    "young man with light skin and red hair, freckled face, neutral expression, cloudy sky background",
-    "middle-aged man in his 50s with bald head and goatee, stern expression, dramatic side lighting",
-    "woman in her 20s with hijab, warm brown eyes, peaceful expression, soft studio light",
-    "Latino man in his 40s with mustache, friendly smile, outdoor natural light",
-    "teenage girl around 15 with braided hair and braces, cheerful grin, school portrait lighting",
-    "man in his 60s with deep wrinkles and kind eyes, weathered face, harsh sunlight",
-    "young woman with very short pixie cut and pale skin, intense gaze, moody low-key lighting",
-    "middle-aged woman with curly gray hair and reading glasses, thoughtful expression, warm interior light",
-    "young man in his 20s with dark skin and short fade haircut, confident look, neon-tinted light",
-    "woman in her 70s with East Asian features, laugh lines, gentle expression, overcast soft light",
+    # Varied angles and gazes
+    "young woman looking slightly to the left, three-quarter view, candid outdoor photo",
+    "man in his 30s looking down with a slight smile, natural light, shallow depth of field",
+    "elderly woman photographed from below, looking into the distance, overcast sky",
+    "teenage boy looking directly at camera, slightly tilted head, indoor ambient light",
+    "woman in her 40s in profile view, wind in her hair, golden hour backlight",
+    
+    # Candid expressions and situations  
+    "man laughing with mouth open, caught mid-conversation, blurred restaurant background",
+    "young woman squinting in bright sunlight, messy hair, beach setting",
+    "middle-aged man with tired expression, fluorescent office lighting, close crop",
+    "woman surprised expression, slightly blurry, indoor party lighting",
+    "elderly man mid-speech, animated expression, outdoor crowd in background",
+    
+    # Accessories and occlusion (common in FFHQ)
+    "young man wearing sunglasses, urban street background, harsh midday shadows",
+    "woman in her 30s wearing a winter hat, rosy cheeks, cold weather outdoor photo",
+    "man with baseball cap, slight stubble, casual selfie angle, natural daylight",
+    "young woman with large earrings and makeup, nighttime photo, warm artificial light",
+    "elderly man wearing reading glasses on nose tip, looking over them, indoor light",
+    
+    # Diverse settings and quality (FFHQ has varied photo quality)
+    "child around 10 years old, gap-toothed smile, school photo with plain background",
+    "woman in her 50s, dark skin, photographed through window glass, soft reflections",
+    "young man with beard, selfie in bathroom mirror, mixed lighting",
+    "middle-aged woman at desk, webcam-like angle from slightly above, screen glow on face",
+    "man in his 60s at outdoor cafe, dappled tree shade on face, background bokeh",
 ]
 
 # 10 seeds per prompt — spread out for variety
@@ -60,20 +67,23 @@ def main():
 
     # Load FLUX pipeline
     print("Loading FLUX model...")
-    pipe = FluxPipeline.from_pretrained(
+    pipe = Flux2KleinPipeline.from_pretrained(
         "black-forest-labs/FLUX.2-klein-4B",
         torch_dtype=torch.bfloat16,
     )
     pipe.enable_model_cpu_offload()
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"CUDA device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None'}")
+    print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB" if torch.cuda.is_available() else "")
 
     img_idx = 0
+    generator = torch.Generator(device="cuda")
     for prompt_idx, prompt in enumerate(PROMPTS):
         full_prompt = f"{prompt}, {FRAMING}"
         print(f"\nPrompt {prompt_idx + 1}/20: {prompt[:60]}...")
 
         for seed_idx, seed in enumerate(tqdm(SEEDS, desc=f"  Seeds", leave=False)):
-            generator = torch.Generator(device="cpu").manual_seed(seed)
-
+            generator.manual_seed(seed)
             image = pipe(
                 prompt=full_prompt,
                 height=RESOLUTION,

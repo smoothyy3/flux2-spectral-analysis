@@ -1,11 +1,10 @@
 """
 Sample 200 random images from FFHQ dataset via HuggingFace.
 
-Uses numpy random seed 42 for reproducibility. Downloads images and saves
-them as 1024x1024 PNGs to data/real/.
+Uses seed 42 for reproducibility. Streams images without downloading the
+full dataset and saves them as 1024x1024 PNGs to data/real/.
 """
 
-import numpy as np
 from pathlib import Path
 from datasets import load_dataset
 from PIL import Image
@@ -20,22 +19,15 @@ RESOLUTION = 1024
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("Loading FFHQ dataset from HuggingFace...")
-    dataset = load_dataset("merkol/ffhq", split="train")
+    print("Loading FFHQ dataset from HuggingFace (streaming)...")
+    dataset = load_dataset("marcosv/ffhq-dataset", split="train", streaming=True)
 
-    n_total = len(dataset)
-    print(f"Dataset has {n_total} images.")
-
-    # Reproducible random sample
-    rng = np.random.default_rng(SEED)
-    indices = rng.choice(n_total, size=N_SAMPLES, replace=False)
-    indices.sort()
+    # Shuffle with seed and take N_SAMPLES — no full download needed
+    dataset = dataset.shuffle(seed=SEED, buffer_size=10_000).take(N_SAMPLES)
 
     print(f"Sampling {N_SAMPLES} images with seed {SEED}...")
-    print(f"Selected indices: {indices[:10]}... (showing first 10)")
 
-    for i, idx in enumerate(tqdm(indices, desc="Saving FFHQ samples")):
-        item = dataset[int(idx)]
+    for i, item in enumerate(tqdm(dataset, total=N_SAMPLES, desc="Saving FFHQ samples")):
         img = item["image"]
 
         # Ensure 1024x1024 PNG
@@ -45,10 +37,6 @@ def main():
         img.save(OUTPUT_DIR / f"real_{i:04d}.png", format="PNG")
 
     print(f"Saved {N_SAMPLES} images to {OUTPUT_DIR}")
-
-    # Save the indices for reproducibility
-    np.save(OUTPUT_DIR.parent / "ffhq_sample_indices.npy", indices)
-    print("Saved sample indices to data/ffhq_sample_indices.npy")
 
 
 if __name__ == "__main__":

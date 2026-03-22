@@ -9,6 +9,7 @@ __pycache__/
 
 # Distribution / packaging
 Literature/
+.claude/
 .DS_Store
 .Python
 build/
@@ -213,3 +214,8 @@ __marimo__/
 data/real/
 data/generated/
 data/features/
+
+# Spectral analysis additions
+data/
+*.py[cod]
+.venv/

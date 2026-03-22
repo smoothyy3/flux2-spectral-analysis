@@ -1,0 +1,39 @@
+data:
+  real_dir: "data/real"
+  generated_dirs:
+    klein_4b_distilled: "data/generated/klein_4b_distilled"
+    # klein_4b_base: "data/generated/klein_4b_base"      # uncomment when available
+    # gguf_q8: "data/generated/gguf_q8"                  # uncomment when available
+    # gguf_q5: "data/generated/gguf_q5"
+    # gguf_q4: "data/generated/gguf_q4"
+  image_size: 1024
+
+spectral:
+  max_radius: 512              # image_size // 2
+  spectrum_bins: 512           # full-resolution radial spectrum
+  frequency_bands: 3           # low / mid / high
+  normalize_method: "sum_to_one"
+
+controls:
+  degradation_methods:
+    - blur_1.5
+    - downup_512
+    - jpeg_85
+  run_2d_analysis: true
+  run_per_category: true
+
+detection:
+  feature_bins: 128            # downsample spectrum to this many bins for LR/SVM/RF
+  cv_folds: 5
+  random_seed: 42
+  classifiers:
+    - logistic_regression
+    - svm_rbf
+    - random_forest
+
+output:
+  figures_dir: "results/figures"
+  tables_dir: "results/tables"
+  features_dir: "data/features"
+  figure_dpi: 300
+  figure_format: "png"

@@ -1,0 +1,31 @@
+[project]
+name = "flux-spectral-analysis"
+version = "0.1.0"
+description = "Spectral analysis of FLUX.2 rectified flow transformer outputs"
+authors = [{ name = "Jonas Möbes" }]
+requires-python = ">=3.10"
+
+[project.dependencies]
+torch = ">=2.1"
+diffusers = { git = "https://github.com/huggingface/diffusers.git" }
+transformers = ">=4.36"
+accelerate = "*"
+sentencepiece = "*"
+protobuf = "*"
+numpy = "*"
+scipy = "*"
+scikit-learn = "*"
+matplotlib = "*"
+seaborn = "*"
+pillow = "*"
+pyyaml = "*"
+tqdm = "*"
+jupyter = "*"
+datasets = "*"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

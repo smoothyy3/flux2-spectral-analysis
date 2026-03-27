@@ -106,10 +106,7 @@ def plot_2d_spectra_comparison(
     global_vmin = min(ls.min() for ls in log_specs)
     global_vmax = max(ls.max() for ls in log_specs)
 
-    # Reserve 0.85 of width for image panels, 0.06 for the colorbar strip
     fig, axes = plt.subplots(1, n, figsize=(5 * n + 1, 5), squeeze=False)
-    fig.subplots_adjust(left=0.05, right=0.88, top=0.88, bottom=0.08,
-                        wspace=0.08)
 
     for ax, group_name, log_spec in zip(axes[0], group_names, log_specs):
         im = ax.imshow(
@@ -124,9 +121,8 @@ def plot_2d_spectra_comparison(
         ax.set_xlabel("H. frequency")
         ax.set_ylabel("V. frequency")
 
-    # Dedicated colorbar axes to the right of all image panels
-    cbar_ax = fig.add_axes([0.90, 0.08, 0.02, 0.80])
-    cbar = fig.colorbar(im, cax=cbar_ax)
+    # Attach colorbar to the rightmost axis only
+    cbar = fig.colorbar(im, ax=axes[0, -1], fraction=0.046, pad=0.04)
     cbar.set_label("log₁₀(Power)")
 
     fig.suptitle("2-D Power Spectrum Comparison", fontsize=13)

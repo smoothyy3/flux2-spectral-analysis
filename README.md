@@ -2,6 +2,9 @@
 
 This project applies azimuthal spectral averaging (Keuper et al., CVPR 2020) to FLUX.2 image generation models, comparing the radial power spectra of generated face images against 200 real FFHQ photographs. The main observation is that the LADD-trained distilled model produces spectrally near-identical output to real images (Δslope +0.016), while the MSE-trained base model does not at any tested inference setting (+0.195 to +0.693), and this difference persists when inference parameters are matched — suggesting the training objective, not inference configuration, is the primary factor.
 
+![2D Power Spectrum Comparison](results/controls/figures/2d_spectrum_comparison.png)
+*2D log-power spectra (|F(u,v)|², DC-centered) for real FFHQ images and three FLUX.2 model variants. The isotropic falloff confirms no directional grid artifacts.*
+
 ---
 
 ## Motivation
@@ -45,6 +48,9 @@ FLUX-generated images exhibit a spectral fingerprint reversed from GANs: mid-fre
 
 The VAE round-trip experiment produces zero statistically significant frequency bins (p < 0.05) across all 513 bins. Mean absolute deviation: 0.015 log₁₀. The VAE decoder is spectrally transparent. The fingerprint originates in the flow-matching denoising process.
 
+![VAE Round-trip Spectral Difference](results/vae_roundtrip/figures/difference.png)
+*Encoding and decoding 50 real images through the FLUX VAE produces no statistically significant spectral deviation. The difference signal is indistinguishable from noise across all 513 frequency bins.*
+
 ### Degradation Controls
 
 | Condition | Δ slope vs. real |
@@ -70,6 +76,9 @@ Degradations push spectral slope steeper (less high-frequency content). FLUX gen
 **Guidance does not explain the distilled model's spectral realism.** Lowering guidance from 4.0 to 1.0 on the base model increases the spectral deviation (+0.195 → +0.316), not decreases it.
 
 **LADD training is the remaining candidate.** At matched inference settings (g=1.0, s=4), the base model shows a 44× larger slope deviation than the distilled model. However, this comparison is confounded: the base model produces degraded images at 4 steps (outside its design parameters), so the training objective effect cannot be cleanly separated from image quality degradation.
+
+![Grid Spectral Difference Panel](results/grid_ablation/figures/grid_spectral_difference_panel.png)
+*Signed spectral differences across three inference conditions. Left: Base at 50 steps (smooth W-shape). Centre: Base at 4 steps (severe instability, wild high-frequency spikes). Right: Distilled LADD at 4 steps (near-flat, Δ≈0).*
 
 ### FLUX.2 Max
 

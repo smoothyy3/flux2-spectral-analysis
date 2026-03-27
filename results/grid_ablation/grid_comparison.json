@@ -1,0 +1,41 @@
+{
+  "real_slope": -2.8580028998425453,
+  "conditions": {
+    "B": {
+      "label": "Base g=1.0 s=50",
+      "steps": 50,
+      "guidance": 1.0,
+      "n_images": 19,
+      "slope": -2.5421905773102758,
+      "slope_diff": 0.31581232253226954,
+      "wasserstein": 0.008794139336500861,
+      "kl_divergence": 0.0010382584120022652,
+      "lr_auc_mean": 0.98125,
+      "lr_auc_std": 0.011180339887498933
+    },
+    "D": {
+      "label": "Base g=1.0 s=4",
+      "steps": 4,
+      "guidance": 1.0,
+      "n_images": 56,
+      "slope": -2.1652627781110785,
+      "slope_diff": 0.6927401217314668,
+      "wasserstein": 0.007012172960532359,
+      "kl_divergence": 0.00045526468722163033,
+      "lr_auc_mean": 1.0,
+      "lr_auc_std": 0.0
+    },
+    "distilled": {
+      "label": "Distilled g=1.0 s=4",
+      "steps": 4,
+      "guidance": 1.0,
+      "n_images": 200,
+      "slope": -2.842498360112856,
+      "slope_diff": 0.015504539729689348,
+      "wasserstein": 0.006883612559278052,
+      "kl_divergence": 0.00019743919092577868,
+      "lr_auc_mean": 0.983125,
+      "lr_auc_std": 0.013526594175918769
+    }
+  }
+}

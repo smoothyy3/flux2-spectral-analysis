@@ -131,18 +131,17 @@ def plot_band_energy_comparison(
         for bar, val in zip(bars, energies):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.003,
-                f"{val:.3f}",
+                bar.get_height() + 0.05,
+                f"{val:.2f}",
                 ha="center",
                 va="bottom",
                 fontsize=8,
-                rotation=45,
             )
 
     ax.set_xticks(x)
     ax.set_xticklabels(band_labels)
-    ax.set_ylabel("Energy fraction")
-    ax.set_title("Band Energy Comparison")
+    ax.set_ylabel("Mean log₁₀(power)")
+    ax.set_title("Band Energy Comparison (mean log power per band)")
     ax.legend(loc="upper right", framealpha=0.8)
 
     fig.savefig(output_path)

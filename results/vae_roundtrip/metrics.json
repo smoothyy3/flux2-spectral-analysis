@@ -1,0 +1,30 @@
+{
+  "n_images": 20,
+  "significant_bins": 0,
+  "total_bins": 513,
+  "mean_abs_log_diff": 0.015441791745983268,
+  "max_over_production": {
+    "value": 0.14492924821220132,
+    "bin": 512
+  },
+  "max_under_production": {
+    "value": -0.009214384984167268,
+    "bin": 1
+  },
+  "spectral_slope": {
+    "real": -2.8089859756630173,
+    "vae_roundtrip": -2.7939932623385633
+  },
+  "band_energy": {
+    "real": {
+      "low": 6.207665782297212,
+      "mid": 4.0465146026611345,
+      "high": 2.911502265380231
+    },
+    "vae_roundtrip": {
+      "low": 6.205800803705805,
+      "mid": 4.053611649203506,
+      "high": 2.9275390144440845
+    }
+  }
+}

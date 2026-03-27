@@ -2,6 +2,14 @@
 
 This module provides functions to load grayscale images from disk and
 validate their shapes before spectral decomposition.
+
+Normalization convention
+------------------------
+Images are normalized to [0, 1] (float64) before FFT, i.e. divided by 255.
+This changes absolute power levels compared to Keuper et al. (2020), who
+operate on raw [0, 255] uint8 values.  Relative spectral shapes and all
+comparative metrics (slope, Wasserstein, band ratios) are unaffected by this
+scalar factor because the factor cancels in ratios and log-differences.
 """
 
 from __future__ import annotations

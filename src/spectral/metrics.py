@@ -50,6 +50,10 @@ def kl_divergence(p: np.ndarray, q: np.ndarray) -> float:
     -------
     float
         KL(p || q) = sum(p * log(p / q)).  Always >= 0; equals 0 iff p == q.
+
+        This is one-directional (asymmetric): KL(real || gen) measures how
+        many extra bits are needed to encode the real distribution using a
+        code optimised for the generated distribution.
     """
     p_norm = normalize_spectrum(p)
     q_norm = normalize_spectrum(q)
@@ -102,58 +106,65 @@ def l2_log_distance(p: np.ndarray, q: np.ndarray) -> float:
 
 
 def band_energy_ratios(spectrum: np.ndarray, n_bands: int = 3) -> np.ndarray:
-    """Split the spectrum into equal frequency bands and return energy fractions.
+    """Split the spectrum into equal bands and return mean log₁₀ power per band.
 
-    The DC component (bin 0) is excluded before splitting because its energy
-    typically exceeds all other bins combined, which would make mid and high
-    band fractions round to zero.  The remaining bins are divided into
-    *n_bands* contiguous, equal-length segments.
+    Natural image spectra follow a 1/f² law, so low-frequency bins carry
+    >99.9% of total linear energy even after excluding the DC component.
+    Fractions of total linear energy are therefore uninformative (mid and
+    high bands always round to 0.000).  Instead this function returns the
+    mean log₁₀ power in each band, which is well-distributed and directly
+    comparable between groups.
+
+    DC (bin 0) is excluded from all bands.
 
     Parameters
     ----------
     spectrum : np.ndarray
-        1-D power spectrum array (e.g. radially averaged), non-negative.
-        Index 0 is the DC component and is excluded from the calculation.
+        1-D power spectrum array, non-negative. Index 0 is the DC component.
     n_bands : int, optional
-        Number of equal-width bands to split the spectrum into.
-        Defaults to 3 (low / mid / high).
+        Number of equal-width bands. Defaults to 3 (low / mid / high).
 
     Returns
     -------
     np.ndarray
-        Array of shape (n_bands,) containing the energy fraction for each
-        band.  Values sum to 1.
+        Shape (n_bands,). Mean log₁₀(power + ε) for each band.
     """
     spectrum = spectrum.astype(np.float64)
-    # Exclude DC bin — its energy (~10^11) dwarfs all other bins combined
-    spec_no_dc = spectrum[1:]
-    total = spec_no_dc.sum() + _EPSILON
-    n = len(spec_no_dc)
+    log_spec = np.log10(np.maximum(spectrum[1:], _EPSILON))  # exclude DC
+    n = len(log_spec)
     band_size = n // n_bands
-    ratios = np.zeros(n_bands, dtype=np.float64)
+    result = np.zeros(n_bands, dtype=np.float64)
     for i in range(n_bands):
         start = i * band_size
         end = start + band_size if i < n_bands - 1 else n
-        ratios[i] = spec_no_dc[start:end].sum() / total
-    return ratios
+        result[i] = log_spec[start:end].mean()
+    return result
 
 
-def spectral_slope(spectrum: np.ndarray) -> tuple[float, float]:
+def spectral_slope(
+    spectrum: np.ndarray,
+    bin_start: int = 1,
+    bin_end: int | None = None,
+) -> tuple[float, float]:
     """Fit a power-law slope to the radial power spectrum in log-log space.
 
     The fit is performed as::
 
         log10(power) ~ slope * log10(freq) + intercept
 
-    using ``np.polyfit`` (degree 1).  The DC component (freq = 0) is
-    excluded because log10(0) is undefined.  Natural images typically
-    exhibit a slope near -2.
+    using ``np.polyfit`` (degree 1).  Natural images typically exhibit a
+    slope near -2.
 
     Parameters
     ----------
     spectrum : np.ndarray
-        1-D power spectrum array.  Index 0 is the DC component and is
-        automatically skipped.
+        1-D power spectrum array.  Index 0 is the DC component.
+    bin_start : int, optional
+        First bin index to include in the fit.  Defaults to 1 (skips DC).
+        Use 10 to also exclude near-DC artefacts that inflate variance.
+    bin_end : int or None, optional
+        One-past-last bin index.  ``None`` uses the full spectrum length.
+        Use 400 to exclude Nyquist-edge noise on 512-bin spectra.
 
     Returns
     -------
@@ -161,10 +172,13 @@ def spectral_slope(spectrum: np.ndarray) -> tuple[float, float]:
         ``(slope, intercept)`` from the log-log linear fit.
     """
     spectrum = spectrum.astype(np.float64)
-    freqs = np.arange(1, len(spectrum), dtype=np.float64)  # skip DC
-    # Use a floor of 1.0 so that near-zero high-frequency bins do not produce
-    # log10(1e-12) = -12 values that corrupt the linear fit.
-    power = np.maximum(spectrum[1:], 1.0)
+    end = min(bin_end, len(spectrum)) if bin_end is not None else len(spectrum)
+    start = max(bin_start, 1)  # always skip DC (log10(0) is undefined)
+
+    freqs = np.arange(start, end, dtype=np.float64)
+    # Floor at 1.0: near-zero high-frequency bins produce log10(~0) ≈ -12
+    # which corrupts the linear fit.
+    power = np.maximum(spectrum[start:end], 1.0)
 
     log_f = np.log10(freqs)
     log_p = np.log10(power)
@@ -216,8 +230,8 @@ def compute_all_metrics(
     """
     real_bands = band_energy_ratios(real_mean, n_bands=n_bands)
     gen_bands = band_energy_ratios(gen_mean, n_bands=n_bands)
-    real_sl, real_ic = spectral_slope(real_mean)
-    gen_sl, gen_ic = spectral_slope(gen_mean)
+    real_sl, real_ic = spectral_slope(real_mean, bin_start=10, bin_end=400)
+    gen_sl, gen_ic = spectral_slope(gen_mean, bin_start=10, bin_end=400)
 
     return {
         "kl_divergence": kl_divergence(real_mean, gen_mean),

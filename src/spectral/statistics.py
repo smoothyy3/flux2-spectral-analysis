@@ -33,14 +33,23 @@ def population_stats(
     return mean.astype(np.float64), std.astype(np.float64)
 
 
+_LOG_FLOOR = 1.0  # floor before log10 — must match value used in visualization
+
+
 def per_frequency_ttest(
     spectra_a: np.ndarray,
     spectra_b: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Run an independent-samples t-test at every frequency bin.
+    """Run an independent-samples Welch t-test at every frequency bin.
 
-    For each radial frequency bin r, performs ``scipy.stats.ttest_ind``
-    between the N_A values in group A and the N_B values in group B.
+    Operates on log10-transformed power values.  Raw linear power spans
+    ~10^0 to ~10^11 and is heavily right-skewed; the t-test's normality
+    assumption holds far better in log space.
+
+    p-values are NOT corrected for multiple comparisons across ~512 bins.
+    Bonferroni correction (α/512 ≈ 1e-4) would be highly conservative.
+    Uncorrected p-values are suitable for exploratory visualization but
+    should not be interpreted as formal per-bin hypothesis tests.
 
     Parameters
     ----------
@@ -56,12 +65,16 @@ def per_frequency_ttest(
     p_values : np.ndarray
         Two-tailed p-value at each frequency bin, shape (R,).
     """
-    r = spectra_a.shape[1]
+    # Log-transform before testing — raw linear power is too skewed for t-test.
+    log_a = np.log10(np.maximum(spectra_a.astype(np.float64), _LOG_FLOOR))
+    log_b = np.log10(np.maximum(spectra_b.astype(np.float64), _LOG_FLOOR))
+
+    r = log_a.shape[1]
     t_stats = np.zeros(r, dtype=np.float64)
     p_values = np.zeros(r, dtype=np.float64)
 
     for i in range(r):
-        result = sp_stats.ttest_ind(spectra_a[:, i], spectra_b[:, i], equal_var=False)
+        result = sp_stats.ttest_ind(log_a[:, i], log_b[:, i], equal_var=False)
         t_stats[i] = result.statistic
         p_values[i] = result.pvalue
 

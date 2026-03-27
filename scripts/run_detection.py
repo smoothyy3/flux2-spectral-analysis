@@ -27,6 +27,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from src.spectral.io import compute_spectra
 from src.spectral.statistics import population_stats
 from src.detection.features import build_feature_matrix
 from src.detection.classifier import (
@@ -51,14 +52,6 @@ from src.visualization.detection import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_spectra(cache_path: Path) -> np.ndarray | None:
-    if not cache_path.exists():
-        print(f"  WARNING: cache not found: {cache_path}")
-        return None
-    data = np.load(cache_path)
-    return data["spectra"]
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -67,46 +60,44 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run detection experiment (real vs. generated classifiers)."
     )
+    parser.add_argument("--config", default="configs/experiment.yaml")
     parser.add_argument(
-        "--config",
-        default="configs/experiment.yaml",
-        help="Path to the experiment YAML config file.",
+        "--model",
+        default=None,
+        help="Run only this model key. Omit to run all active entries.",
     )
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    with open(config_path) as f:
+    with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    generated_dirs: dict[str, str] = cfg["data"]["generated_dirs"]
-    features_dir = Path(cfg["output"]["features_dir"])
-    figures_dir = Path(cfg["output"]["figures_dir"])
-    tables_dir = Path(cfg["output"]["tables_dir"])
+    real_dir = _REPO_ROOT / cfg["data"]["real_dir"]
+    all_generated: dict[str, Path] = {
+        name: _REPO_ROOT / p
+        for name, p in cfg["data"]["generated_dirs"].items()
+    }
+    if args.model:
+        all_generated = {args.model: all_generated[args.model]}
+
     n_bins: int = cfg["detection"]["feature_bins"]
     cv_folds: int = cfg["detection"]["cv_folds"]
     random_seed: int = cfg["detection"]["random_seed"]
 
-    for d in [figures_dir, tables_dir]:
-        d.mkdir(parents=True, exist_ok=True)
-
     # ---- Load real spectra -------------------------------------------------
-    print("\n[1/3] Loading cached real spectra ...")
-    real_cache = features_dir / "real_spectra.npz"
-    real_spectra = _load_spectra(real_cache)
-    if real_spectra is None:
-        print("  ERROR: Run run_analysis.py first to compute and cache spectra.")
-        return
+    print("\n[1/3] Computing real spectra ...")
+    real_spectra = compute_spectra(real_dir)
     print(f"  Real: {real_spectra.shape[0]} images, {real_spectra.shape[1]} bins")
 
     # ---- Load generated spectra --------------------------------------------
-    print("\n[2/3] Loading cached generated spectra ...")
+    print("\n[2/3] Computing generated spectra ...")
     gen_data: dict[str, np.ndarray] = {}
-    for group_name in generated_dirs.keys():
-        cache_path = features_dir / f"{group_name}_spectra.npz"
-        spectra = _load_spectra(cache_path)
-        if spectra is not None:
+    for group_name, gen_dir in all_generated.items():
+        try:
+            spectra = compute_spectra(gen_dir)
             gen_data[group_name] = spectra
             print(f"  {group_name}: {spectra.shape[0]} images")
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"  WARNING: skipping {group_name} — {exc}")
 
     if not gen_data:
         print("  No generated spectra available.  Exiting.")
@@ -119,6 +110,10 @@ def main() -> None:
 
     for group_name, gen_spectra in gen_data.items():
         print(f"\n  --- Group: {group_name} ---")
+
+        figures_dir = _REPO_ROOT / "results" / group_name / "figures"
+        tables_dir  = _REPO_ROOT / "results" / group_name
+        figures_dir.mkdir(parents=True, exist_ok=True)
 
         # Build feature matrix
         X, y = build_feature_matrix(real_spectra, gen_spectra, n_bins=n_bins)
@@ -151,42 +146,25 @@ def main() -> None:
             roc_data[clf_name] = (fpr, tpr, roc_auc)
 
         # Figures
-        roc_path = figures_dir / f"roc_curves_{group_name}.png"
-        plot_roc_curves(roc_data, roc_path)
-        print(f"  Saved: {roc_path.name}")
-
-        cv_path = figures_dir / f"cv_results_{group_name}.png"
-        plot_cv_results(cv_results, cv_path)
-        print(f"  Saved: {cv_path.name}")
+        plot_roc_curves(roc_data, figures_dir / "roc_curves.png")
+        plot_cv_results(cv_results, figures_dir / "cv_results.png")
+        print(f"  Figures → {figures_dir}")
 
         # Random forest feature importance
         rf_clf = classifiers_final["random_forest"]
         rf_importance_df = random_forest_importance(rf_clf, feature_names)
         rf_top = top_k_features(rf_importance_df, k=20)
+        plot_feature_importance(rf_top, figures_dir / "feature_importance_rf.png",
+                                top_k=20, title=f"RF Feature Importance — {group_name}")
 
-        rf_imp_path = figures_dir / f"feature_importance_rf_{group_name}.png"
-        plot_feature_importance(
-            rf_top, rf_imp_path,
-            top_k=20,
-            title=f"RF Feature Importance — {group_name}",
-        )
-        print(f"  Saved: {rf_imp_path.name}")
-
-        # Logistic regression coefficients
         lr_clf = classifiers_final["logistic_regression"]
         lr_coef_df = logistic_regression_coefficients(lr_clf, feature_names)
         lr_top = top_k_features(lr_coef_df, k=20)
+        plot_feature_importance(lr_top, figures_dir / "feature_importance_lr.png",
+                                top_k=20, title=f"LR Coefficients — {group_name}")
 
-        lr_imp_path = figures_dir / f"feature_importance_lr_{group_name}.png"
-        plot_feature_importance(
-            lr_top, lr_imp_path,
-            top_k=20,
-            title=f"LR Coefficients — {group_name}",
-        )
-        print(f"  Saved: {lr_imp_path.name}")
-
-        # Store results
-        all_detection_results[group_name] = {
+        # Save per-model detection results
+        detection_result = {
             "cv_results": cv_results,
             "roc_auc_full": {
                 clf_name: float(roc_auc)
@@ -195,12 +173,11 @@ def main() -> None:
             "rf_top_features": rf_top["feature"].tolist(),
             "lr_top_features": lr_top["feature"].tolist(),
         }
-
-    # ---- Save detection results --------------------------------------------
-    results_path = tables_dir / "detection_results.json"
-    with open(results_path, "w") as f:
-        json.dump(all_detection_results, f, indent=2)
-    print(f"\nDetection results saved to {results_path}")
+        all_detection_results[group_name] = detection_result
+        det_path = tables_dir / "detection_results.json"
+        with open(det_path, "w") as f:
+            json.dump(detection_result, f, indent=2)
+        print(f"  Detection results → {det_path}")
 
     # ---- Print summary table -----------------------------------------------
     print("\n" + "=" * 70)

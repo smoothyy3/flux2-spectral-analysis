@@ -98,6 +98,7 @@ def evaluate_classifier(
             ``accuracy``, ``roc_auc``, and ``f1``.
     """
     import copy
+    from sklearn.preprocessing import StandardScaler
 
     skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_seed)
     fold_results: list[dict] = []
@@ -105,6 +106,11 @@ def evaluate_classifier(
     for train_idx, test_idx in skf.split(X, y):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
+
+        # Scaler fitted on train split only — prevents test-set leakage.
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
 
         fold_clf = copy.deepcopy(clf)
         fold_clf.fit(X_train, y_train)

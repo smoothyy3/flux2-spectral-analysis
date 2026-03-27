@@ -26,6 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from src.spectral.io import compute_spectra
 from src.spectral.preprocessing import load_images_from_dir
 from src.spectral.fft import batch_power_spectra, average_power_spectrum_2d
 from src.spectral.azimuthal import batch_azimuthal_average
@@ -43,24 +44,6 @@ from src.visualization.heatmaps import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _load_or_compute_spectra(
-    directory: Path,
-    cache_path: Path,
-    force: bool,
-) -> np.ndarray:
-    if cache_path.exists() and not force:
-        print(f"  Loading cached spectra from {cache_path.name} ...")
-        return np.load(cache_path)["spectra"]
-
-    print(f"  Computing spectra for {directory} ...")
-    images = load_images_from_dir(directory)
-    ps = batch_power_spectra(images)
-    radial = batch_azimuthal_average(ps)
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(cache_path, spectra=radial)
-    print(f"  Cached → {cache_path}")
-    return radial
 
 
 def _load_images(directory: Path) -> list[np.ndarray]:
@@ -84,11 +67,6 @@ def main() -> None:
         default="configs/experiment.yaml",
         help="Path to the experiment YAML config file.",
     )
-    parser.add_argument(
-        "--force-recompute",
-        action="store_true",
-        help="Ignore cached spectra and recompute from raw images.",
-    )
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -100,19 +78,16 @@ def main() -> None:
         name: Path(p) for name, p in cfg["data"]["generated_dirs"].items()
     }
     degradation_methods: list[str] = cfg["controls"]["degradation_methods"]
-    features_dir = Path(cfg["output"]["features_dir"])
-    figures_dir = Path(cfg["output"]["figures_dir"])
-    tables_dir = Path(cfg["output"]["tables_dir"])
+    figures_dir = _REPO_ROOT / "results" / "controls" / "figures"
+    tables_dir  = _REPO_ROOT / "results" / "controls"
     n_bands: int = cfg["spectral"]["frequency_bands"]
-    force: bool = args.force_recompute
 
-    for d in [figures_dir, tables_dir, features_dir]:
+    for d in [figures_dir, tables_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
     # ---- Load real spectra -------------------------------------------------
     print("\n[1/4] Loading real spectra ...")
-    real_cache = features_dir / "real_spectra.npz"
-    real_spectra = _load_or_compute_spectra(real_dir, real_cache, force)
+    real_spectra = compute_spectra(real_dir)
     real_mean, real_std = population_stats(real_spectra)
     print(f"  Real: {real_spectra.shape[0]} images")
 
@@ -124,9 +99,8 @@ def main() -> None:
     print("\n[2/4] Loading generated spectra ...")
     gen_data: dict[str, np.ndarray] = {}
     for group_name, gen_dir in generated_dirs.items():
-        cache_path = features_dir / f"{group_name}_spectra.npz"
         try:
-            spectra = _load_or_compute_spectra(gen_dir, cache_path, force)
+            spectra = compute_spectra(gen_dir)
             gen_data[group_name] = spectra
             print(f"  {group_name}: {spectra.shape[0]} images")
         except (FileNotFoundError, ValueError) as exc:
@@ -138,18 +112,11 @@ def main() -> None:
 
     if real_images:
         for method in degradation_methods:
-            cache_path = features_dir / f"degraded_{method.replace('.', '_')}_spectra.npz"
-            if cache_path.exists() and not force:
-                print(f"  Loading cached degraded spectra: {method}")
-                degraded_spectra[method] = np.load(cache_path)["spectra"]
-            else:
-                print(f"  Degrading images with method: {method}")
-                deg_images = apply_degradation(real_images, method)
-                ps = batch_power_spectra(deg_images)
-                radial = batch_azimuthal_average(ps)
-                np.savez_compressed(cache_path, spectra=radial)
-                degraded_spectra[method] = radial
-                print(f"  Cached → {cache_path}")
+            print(f"  Degrading images with method: {method}")
+            deg_images = apply_degradation(real_images, method)
+            ps = batch_power_spectra(deg_images)
+            radial = batch_azimuthal_average(ps)
+            degraded_spectra[method] = radial
     else:
         print("  No real images available; skipping degradation.")
 

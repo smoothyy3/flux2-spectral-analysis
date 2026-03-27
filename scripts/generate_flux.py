@@ -3,6 +3,7 @@ Generate 200 FLUX face portraits for spectral analysis.
 
 20 diverse prompts x 10 seeds each = 200 images.
 All outputs are 1024x1024 PNGs saved to data/generated/.
+Uses FLUX.2-klein-base-4B (undistilled, 50 steps, guidance_scale=4.0).
 """
 
 import torch
@@ -10,10 +11,10 @@ from pathlib import Path
 from diffusers import Flux2KleinPipeline
 from tqdm import tqdm
 
-OUTPUT_DIR = Path(__file__).parent.parent / "data" / "generated" / "klein_4b_distilled"
+OUTPUT_DIR = Path(__file__).parent.parent / "data" / "generated" / "klein_4b_base"
 RESOLUTION = 1024
-NUM_INFERENCE_STEPS = 4
-GUIDANCE_SCALE = 1.0
+NUM_INFERENCE_STEPS = 50
+GUIDANCE_SCALE = 4.0
 
 # Framing suffix applied to every prompt for consistent FFHQ-like composition
 FRAMING = (
@@ -68,7 +69,7 @@ def main():
     # Load FLUX pipeline
     print("Loading FLUX model...")
     pipe = Flux2KleinPipeline.from_pretrained(
-        "black-forest-labs/FLUX.2-klein-4B",
+        "black-forest-labs/FLUX.2-klein-base-4B",
         torch_dtype=torch.bfloat16,
     )
     pipe.enable_model_cpu_offload()

@@ -51,10 +51,10 @@ from src.visualization.spectra import plot_mean_spectra
 # Configuration
 # ---------------------------------------------------------------------------
 
-N_IMAGES: int = 50
+N_IMAGES: int = 20
 REAL_DIR: Path = ROOT / "data" / "real"
 OUTPUT_DIR: Path = ROOT / "data" / "generated" / "vae_roundtrip"
-FIGURES_DIR: Path = ROOT / "results" / "figures"
+FIGURES_DIR: Path = ROOT / "results" / "vae_roundtrip" / "figures"
 RESOLUTION: int = 1024
 MODEL_ID: str = "black-forest-labs/FLUX.2-klein-4B"
 
@@ -69,60 +69,28 @@ _LOG_FLOOR: float = 1.0
 
 
 def load_vae() -> torch.nn.Module:
-    """Load only the FLUX.2 VAE component, freeing everything else.
+    """Load only the FLUX.2 VAE component via the subfolder route.
 
-    Tries the lightweight subfolder route first.  Falls back to loading the
-    full ``Flux2KleinPipeline`` and extracting the VAE, then explicitly
-    deletes all other components and empties the CUDA cache.
+    The VAE weights alone are ~500 MB at bfloat16, well within 8 GB VRAM.
+    Loading the full pipeline is intentionally avoided to prevent OOM.
 
     Returns
     -------
     torch.nn.Module
         The AutoencoderKL in eval mode on CUDA, dtype bfloat16.
     """
-    # --- Attempt 1: load just the VAE via subfolder -------------------------
-    try:
-        from diffusers import AutoencoderKL
+    from diffusers import AutoencoderKL
 
-        print("Loading VAE via subfolder route ...")
-        vae = AutoencoderKL.from_pretrained(
-            MODEL_ID,
-            subfolder="vae",
-            torch_dtype=torch.bfloat16,
-        )
-        vae = vae.to("cuda")
-        vae.eval()
-        print("  VAE loaded (subfolder route).")
-        return vae
-    except Exception as exc:
-        print(f"  Subfolder route failed ({exc}).")
-        print("  Falling back to full pipeline ...")
-
-    # --- Attempt 2: load full pipeline, extract VAE, discard the rest -------
-    from diffusers import Flux2KleinPipeline
-
-    pipe = Flux2KleinPipeline.from_pretrained(MODEL_ID, torch_dtype=torch.bfloat16)
-    vae = pipe.vae.to("cuda")
-    vae.eval()
-
-    _OTHER_COMPONENTS = (
-        "transformer",
-        "text_encoder",
-        "text_encoder_2",
-        "tokenizer",
-        "tokenizer_2",
-        "scheduler",
-        "feature_extractor",
-        "image_encoder",
+    print("Loading VAE (subfolder route) ...")
+    vae = AutoencoderKL.from_pretrained(
+        MODEL_ID,
+        subfolder="vae",
+        torch_dtype=torch.bfloat16,
+        low_cpu_mem_usage=True,
     )
-    for attr in _OTHER_COMPONENTS:
-        if hasattr(pipe, attr):
-            delattr(pipe, attr)
-    del pipe
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    print("  VAE loaded (full-pipeline route; other components freed).")
+    vae = vae.to("cuda")
+    vae.eval()
+    print("  VAE loaded.")
     return vae
 
 
@@ -247,11 +215,24 @@ def main() -> None:
             if orig_img.size != (RESOLUTION, RESOLUTION):
                 orig_img = orig_img.resize((RESOLUTION, RESOLUTION), Image.LANCZOS)
 
-            # Encode → sample from latent distribution → decode
+            # Encode → sample from latent distribution → decode.
+            # Hold each intermediate in a named variable so Python's GC can
+            # release the DiagonalGaussianDistribution (mean + logvar tensors)
+            # and decoder output before moving to the next image.
             x = pil_to_bfloat16_tensor(orig_img)
-            latent = vae.encode(x).latent_dist.sample()
-            recon_tensor = vae.decode(latent).sample
+            posterior = vae.encode(x)
+            latent = posterior.latent_dist.sample()
+            del posterior, x
+
+            decoder_out = vae.decode(latent)
+            recon_tensor = decoder_out.sample
+            del decoder_out, latent
+
             recon_img = tensor_to_pil(recon_tensor)
+            del recon_tensor
+
+            gc.collect()
+            torch.cuda.empty_cache()
 
             # Persist reconstruction
             recon_img.save(OUTPUT_DIR / f"vae_recon_{i:04d}.png", format="PNG")

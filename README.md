@@ -1,12 +1,12 @@
 # Spectral Forensic Characterization of FLUX.2 Image Generation Models
 
-This project applies azimuthal spectral averaging (Keuper et al., CVPR 2020) to FLUX.2 image generation models, comparing the radial power spectra of generated face images against 200 real FFHQ photographs. The main observation is that the LADD-trained distilled model produces spectrally near-identical output to real images (Δslope +0.016), while the MSE-trained base model does not at any tested inference setting (+0.195 to +0.693), and this difference persists when inference parameters are matched — suggesting the training objective, not inference configuration, is the primary factor.
+This project applies azimuthal spectral averaging (Keuper et al., CVPR 2020) to FLUX.2 image generation models, comparing the radial power spectra of generated face images against 200 real FFHQ photographs. The main observation is that the LADD-trained distilled model produces spectrally near-identical output to real images (Δslope +0.016), while the MSE-trained base model does not at any tested inference setting (+0.195 to +0.693), and this difference persists when inference parameters are matched, suggesting the training objective, not inference configuration, is the primary factor.
 
 ---
 
 ## Motivation
 
-Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the spectral distributions of real images. The artifact was characteristic: under-production of high-frequency content by orders of magnitude, attributable to transposed convolution checkerboard patterns. Modern rectified flow transformers (FLUX.2) use a fundamentally different architecture — patch-based vision transformers with rotary positional embeddings and a flow matching training objective. This project asks whether these models exhibit analogous spectral artifacts, and if so, how they differ from the GAN case.
+Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the spectral distributions of real images. The artifact was characteristic: under-production of high-frequency content by orders of magnitude, attributable to transposed convolution checkerboard patterns. Modern rectified flow transformers (FLUX.2) use a fundamentally different architecture: patch-based vision transformers with rotary positional embeddings and a flow matching training objective. This project asks whether these models exhibit analogous spectral artifacts, and if so, how they differ from the GAN case.
 
 ---
 
@@ -16,7 +16,7 @@ Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the
 1. Convert images to grayscale (luminance channel)
 2. Compute 2D DFT via `np.fft.fft2`, shift DC to center with `np.fft.fftshift`
 3. Compute power spectrum: |F(u,v)|²
-4. Azimuthal average: for each integer radius r, average all power values at distance r from center — produces a 1D spectrum of length 513 for 1024×1024 images
+4. Azimuthal average: for each integer radius r, average all power values at distance r from center. This produces a 1D spectrum of length 513 for 1024×1024 images
 5. Population statistics: mean and standard deviation across N images per group
 6. Spectral slope: log-log linear fit restricted to bins 10–400 (excludes DC and Nyquist edge)
 
@@ -39,7 +39,7 @@ Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the
 
 ### Spectral Fingerprint
 
-FLUX-generated images exhibit a spectral fingerprint reversed from GANs: mid-frequency under-production (bins 50–250) and high-frequency over-production (bins 350–512). The effect magnitude is approximately 0.3–0.4 log₁₀ in power — orders of magnitude smaller than GAN-era artifacts documented by Keuper et al. The fingerprint is isotropic; no directional grid artifacts are present. A logistic regression classifier achieves 0.983 AUC (±0.014) on same-domain, uncompressed data.
+FLUX-generated images exhibit a spectral fingerprint reversed from GANs: mid-frequency under-production (bins 50–250) and high-frequency over-production (bins 350–512). The effect magnitude is approximately 0.3–0.4 log₁₀ in power. These are orders of magnitude smaller than GAN-era artifacts documented by Keuper et al. The fingerprint is isotropic; no directional grid artifacts are present. A logistic regression classifier achieves 0.983 AUC (±0.014) on same-domain, uncompressed data.
 
 ### VAE Isolation
 
@@ -56,7 +56,7 @@ The VAE round-trip experiment produces zero statistically significant frequency 
 | Klein Base g=4.0 s=50 | +0.195 |
 | FLUX.2 Max | +0.223 |
 
-Degradations push spectral slope steeper (less high-frequency content). FLUX generation pushes it shallower (more high-frequency content). These are opposite effects — the FLUX fingerprint is not a quality artifact.
+Degradations push spectral slope steeper (less high-frequency content). FLUX generation pushes it shallower (more high-frequency content). These are opposite effects: the FLUX fingerprint is not a quality artifact.
 
 ### Guidance × Steps Ablation
 

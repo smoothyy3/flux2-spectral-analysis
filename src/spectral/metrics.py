@@ -15,23 +15,26 @@ _EPSILON = 1e-12
 
 
 def normalize_spectrum(spectrum: np.ndarray) -> np.ndarray:
-    """Normalise a power spectrum so that its values sum to 1.
+    """Normalise a log10-power spectrum as a probability distribution.
 
-    A small epsilon is added before normalisation to avoid zero values
-    that would cause problems in KL divergence or log operations.
+    Converts from log10-power space to linear, floors at epsilon, and
+    normalises to sum to 1.  KL divergence and Wasserstein distance require
+    proper probability distributions, so linear conversion is necessary.
 
     Parameters
     ----------
     spectrum : np.ndarray
-        1-D power spectrum array, non-negative values.
+        1-D radial spectrum array in log10-power space.
 
     Returns
     -------
     np.ndarray
-        Normalised spectrum of the same shape, summing to 1, dtype float64.
+        Normalised linear-power distribution of the same shape, summing to
+        1, dtype float64.
     """
-    s = spectrum.astype(np.float64) + _EPSILON
-    return s / s.sum()
+    linear = 10 ** spectrum.astype(np.float64)
+    linear = np.maximum(linear, _EPSILON)
+    return linear / linear.sum()
 
 
 def kl_divergence(p: np.ndarray, q: np.ndarray) -> float:
@@ -86,23 +89,21 @@ def wasserstein_distance(p: np.ndarray, q: np.ndarray) -> float:
 
 
 def l2_log_distance(p: np.ndarray, q: np.ndarray) -> float:
-    """Compute the L2 distance between the log10 power spectra.
+    """Compute the L2 distance between two log10-power spectra.
 
     Parameters
     ----------
     p : np.ndarray
-        Reference (real) power spectrum, 1-D array, positive values.
+        Reference (real) spectrum in log10-power space, 1-D array.
     q : np.ndarray
-        Comparison (generated) power spectrum, 1-D array, positive values.
+        Comparison (generated) spectrum in log10-power space, 1-D array.
 
     Returns
     -------
     float
-        L2 norm of (log10(p) - log10(q)).
+        L2 norm of (p - q) in log10-power space.
     """
-    log_p = np.log10(p.astype(np.float64) + _EPSILON)
-    log_q = np.log10(q.astype(np.float64) + _EPSILON)
-    return float(np.linalg.norm(log_p - log_q))
+    return float(np.linalg.norm(p.astype(np.float64) - q.astype(np.float64)))
 
 
 def band_energy_ratios(spectrum: np.ndarray, n_bands: int = 3) -> np.ndarray:
@@ -130,7 +131,7 @@ def band_energy_ratios(spectrum: np.ndarray, n_bands: int = 3) -> np.ndarray:
         Shape (n_bands,). Mean log₁₀(power + ε) for each band.
     """
     spectrum = spectrum.astype(np.float64)
-    log_spec = np.log10(np.maximum(spectrum[1:], _EPSILON))  # exclude DC
+    log_spec = spectrum[1:]  # already log10-power; exclude DC at index 0
     n = len(log_spec)
     band_size = n // n_bands
     result = np.zeros(n_bands, dtype=np.float64)
@@ -176,12 +177,11 @@ def spectral_slope(
     start = max(bin_start, 1)  # always skip DC (log10(0) is undefined)
 
     freqs = np.arange(start, end, dtype=np.float64)
-    # Floor at 1.0: near-zero high-frequency bins produce log10(~0) ≈ -12
-    # which corrupts the linear fit.
-    power = np.maximum(spectrum[start:end], 1.0)
-
+    # Spectrum is already in log10-power space.  Floor at 0.0 = log10(1):
+    # near-Nyquist bins with near-zero power produce log10(ε) ≈ -12, which
+    # would corrupt the linear fit.
+    log_p = np.maximum(spectrum[start:end], 0.0)
     log_f = np.log10(freqs)
-    log_p = np.log10(power)
 
     slope, intercept = np.polyfit(log_f, log_p, 1)
     return float(slope), float(intercept)

@@ -103,6 +103,10 @@ def evaluate_classifier(
     skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_seed)
     fold_results: list[dict] = []
 
+    # Out-of-fold predictions for unbiased ROC curves.
+    oof_y_true = np.empty(len(y), dtype=y.dtype)
+    oof_y_proba = np.empty(len(y), dtype=np.float64)
+
     for train_idx, test_idx in skf.split(X, y):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
@@ -117,6 +121,9 @@ def evaluate_classifier(
 
         y_pred = fold_clf.predict(X_test)
         y_proba = fold_clf.predict_proba(X_test)[:, 1]
+
+        oof_y_true[test_idx] = y_test
+        oof_y_proba[test_idx] = y_proba
 
         fold_results.append({
             "accuracy": float(accuracy_score(y_test, y_pred)),
@@ -136,6 +143,8 @@ def evaluate_classifier(
         "f1_mean": float(f1s.mean()),
         "f1_std": float(f1s.std()),
         "fold_results": fold_results,
+        "oof_y_true": oof_y_true,
+        "oof_y_proba": oof_y_proba,
     }
 
 

@@ -17,7 +17,6 @@ from src.visualization.style import apply_style, get_color
 
 apply_style()
 
-_LOG_FLOOR = 1.0  # floor before log10; see spectra.py for rationale
 
 
 def plot_spectral_difference(
@@ -58,10 +57,9 @@ def plot_spectral_difference(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Spectra are already in log10-power space.
     freqs = np.arange(len(real_mean))
-    log_real = np.log10(np.maximum(real_mean, _LOG_FLOOR))
-    log_gen = np.log10(np.maximum(gen_mean, _LOG_FLOOR))
-    diff = log_gen - log_real
+    diff = gen_mean - real_mean
     sig_mask = p_values < 0.05
 
     real_color = get_color("real")
@@ -70,8 +68,8 @@ def plot_spectral_difference(
     fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
     # ---- Top panel: overlay ------------------------------------------------
-    ax_top.plot(freqs, log_real, color=real_color, linewidth=1.5, label="Real")
-    ax_top.plot(freqs, log_gen, color=gen_color, linewidth=1.5,
+    ax_top.plot(freqs, real_mean, color=real_color, linewidth=1.5, label="Real")
+    ax_top.plot(freqs, gen_mean, color=gen_color, linewidth=1.5,
                 label=group_name, alpha=0.85)
     ax_top.set_ylabel("log₁₀(Power)")
     ax_top.set_title(f"Mean Radial Power Spectra — Real vs. {group_name}")

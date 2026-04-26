@@ -32,7 +32,7 @@ Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the
 
 **Control experiments:**
 - Degradation controls: Gaussian blur (σ=1.5), 2× downscale/upscale (512→1024), JPEG Q85 applied to real images
-- VAE round-trip: 50 real images encoded and decoded through the FLUX VAE to isolate the decoder's contribution
+- VAE round-trip: 20 real images encoded and decoded through the FLUX VAE to isolate the decoder's contribution
 
 **Ablation:** Guidance × steps grid using Klein Base at varying (steps, guidance) combinations to disentangle inference parameters from training objective effects.
 
@@ -46,7 +46,7 @@ FLUX-generated images exhibit a spectral fingerprint reversed from GANs: mid-fre
 
 ### VAE Isolation
 
-The VAE round-trip experiment produces zero statistically significant frequency bins (p < 0.05) across all 513 bins. Mean absolute deviation: 0.015 log₁₀. The VAE decoder is spectrally transparent. The fingerprint originates in the flow-matching denoising process.
+The VAE round-trip experiment (n=20) produces zero statistically significant frequency bins (p < 0.05) across all 513 bins using a paired t-test. Mean absolute deviation: 0.015 log₁₀. The VAE decoder introduces no detectable spectral shift at this sample size; the fingerprint originates in the flow-matching denoising process.
 
 ![VAE Round-trip Spectral Difference](results/vae_roundtrip/figures/difference.png)
 *Encoding and decoding 50 real images through the FLUX VAE produces no statistically significant spectral deviation. The difference signal is indistinguishable from noise across all 513 frequency bins.*

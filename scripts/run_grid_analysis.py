@@ -41,7 +41,7 @@ from src.visualization.style import apply_style
 # ---------------------------------------------------------------------------
 # Each entry: (steps, guidance, subdir_name, display_label, color, linestyle)
 _GRID_CONDITIONS: dict[str, tuple[int, float, str, str, str, str]] = {
-    "A":         (50, 4.0, "klein_4b_base",     "Base g=4.0 s=50",       "#d62728", "-"),
+    "A":         (50, 4.0, "klein_base_g4_s50",  "Base g=4.0 s=50",       "#d62728", "-"),
     "B":         (50, 1.0, "klein_base_g1_s50",  "Base g=1.0 s=50",       "#1f77b4", "-"),
     "C":         (4,  4.0, "klein_base_g4_s4",   "Base g=4.0 s=4",        "#ff7f0e", "-"),
     "D":         (4,  1.0, "klein_base_g1_s4",   "Base g=1.0 s=4",        "#2ca02c", "-"),
@@ -205,28 +205,28 @@ def plot_spectra_overlay(
     apply_style()
     fig, ax = plt.subplots(figsize=(10, 5))
 
+    # Spectra are already in log10-power space (from compute_spectra).
     real_mean = real_spectra.mean(axis=0)
-    real_std  = real_spectra.std(axis=0)
+    real_std  = real_spectra.std(axis=0, ddof=1)
     x = np.arange(len(real_mean))
-    eps = 1e-10
 
-    ax.plot(x, np.log10(real_mean + eps), color="black", lw=2, label="Real (FFHQ)", zorder=10)
+    ax.plot(x, real_mean, color="black", lw=2, label="Real (FFHQ)", zorder=10)
     ax.fill_between(
         x,
-        np.log10(np.maximum(real_mean - real_std, eps)),
-        np.log10(real_mean + real_std + eps),
+        real_mean - real_std,
+        real_mean + real_std,
         color="black", alpha=0.10,
     )
 
     for cond_id, spectra in cond_spectra.items():
         _, _, _, label, color, ls = _GRID_CONDITIONS[cond_id]
         mean = spectra.mean(axis=0)
-        std  = spectra.std(axis=0)
-        ax.plot(x, np.log10(mean + eps), color=color, lw=1.5, ls=ls, label=label)
+        std  = spectra.std(axis=0, ddof=1)
+        ax.plot(x, mean, color=color, lw=1.5, ls=ls, label=label)
         ax.fill_between(
             x,
-            np.log10(np.maximum(mean - std, eps)),
-            np.log10(mean + std + eps),
+            mean - std,
+            mean + std,
             color=color, alpha=0.08,
         )
 
@@ -344,7 +344,6 @@ def plot_difference_panel(
     fig, axes = plt.subplots(nrows, ncols, figsize=(14, 4 * nrows), squeeze=False)
 
     real_mean = real_spectra.mean(axis=0)
-    eps = 1e-10
     x = np.arange(len(real_mean))
 
     for i, cond_id in enumerate(cond_ids):
@@ -354,7 +353,7 @@ def plot_difference_panel(
         spectra = cond_spectra[cond_id]
         gen_mean = spectra.mean(axis=0)
 
-        diff = np.log10(gen_mean + eps) - np.log10(real_mean + eps)
+        diff = gen_mean - real_mean  # both already in log10-power space
         ax.plot(x, diff, color=color, lw=1.2)
         ax.axhline(0, color="black", lw=0.8, ls="--")
         ax.fill_between(x, diff, 0, where=(diff > 0), color=color, alpha=0.25, label="over")

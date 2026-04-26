@@ -1,7 +1,7 @@
 """
 VAE round-trip experiment for spectral analysis.
 
-Encodes 50 real FFHQ images through the FLUX.2 VAE encoder, decodes them
+Encodes 20 real FFHQ images through the FLUX.2 VAE encoder, decodes them
 back, and compares the radial power spectra of the originals vs. the
 reconstructions.  This isolates the VAE decoder from the flow transformer
 and prompt conditioning entirely.
@@ -42,8 +42,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.spectral.azimuthal import azimuthal_average
-from src.spectral.fft import compute_power_spectrum_2d
-from src.spectral.statistics import per_frequency_ttest, population_stats
+from src.spectral.fft import compute_log_power_spectrum_2d
+from src.spectral.statistics import per_frequency_paired_ttest, population_stats
 from src.visualization.difference import plot_spectral_difference
 from src.visualization.spectra import plot_mean_spectra
 
@@ -51,16 +51,13 @@ from src.visualization.spectra import plot_mean_spectra
 # Configuration
 # ---------------------------------------------------------------------------
 
-N_IMAGES: int = 20
+N_IMAGES: int = 20  # must match the n_images in results/vae_roundtrip/metrics.json
 REAL_DIR: Path = ROOT / "data" / "real"
 OUTPUT_DIR: Path = ROOT / "data" / "generated" / "vae_roundtrip"
 FIGURES_DIR: Path = ROOT / "results" / "vae_roundtrip" / "figures"
 RESOLUTION: int = 1024
 MODEL_ID: str = "black-forest-labs/FLUX.2-klein-4B"
 
-# Floor applied before log10 — must match the value used in spectra.py and
-# difference.py so that summary statistics are directly comparable.
-_LOG_FLOOR: float = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -147,10 +144,11 @@ def tensor_to_pil(tensor: torch.Tensor) -> Image.Image:
 
 
 def image_to_radial_spectrum(img: Image.Image) -> np.ndarray:
-    """Compute the 1-D radially averaged power spectrum of a PIL image.
+    """Compute the 1-D radially averaged log10-power spectrum of a PIL image.
 
     Converts to grayscale (luminance), normalises to [0, 1], computes the
-    2-D power spectrum via FFT, and returns the azimuthal average.
+    2-D log10 power spectrum via FFT (log before averaging, matching Keuper
+    et al. CVPR 2020), and returns the azimuthal average.
 
     Parameters
     ----------
@@ -160,12 +158,12 @@ def image_to_radial_spectrum(img: Image.Image) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        1-D radially averaged power spectrum, dtype float64, length
+        1-D radially averaged log10-power spectrum, dtype float64, length
         ``min(H, W) // 2 + 1``.
     """
     gray = np.array(img.convert("L"), dtype=np.float64) / 255.0
-    power_2d = compute_power_spectrum_2d(gray)
-    return azimuthal_average(power_2d)
+    log_power_2d = compute_log_power_spectrum_2d(gray)
+    return azimuthal_average(log_power_2d)
 
 
 # ---------------------------------------------------------------------------
@@ -250,10 +248,10 @@ def main() -> None:
     orig_mean, orig_std = population_stats(orig_arr)
     recon_mean, recon_std = population_stats(recon_arr)
 
-    # Independent-samples t-test per frequency bin.
-    # (Paired would be tighter, but per_frequency_ttest already exists and
-    # is sufficient for detecting systematic VAE-introduced differences.)
-    _, p_values = per_frequency_ttest(orig_arr, recon_arr)
+    # Paired t-test: each reconstruction is matched to a specific original,
+    # so the paired test exploits within-pair correlation and is more powerful
+    # than an independent-samples test.
+    _, p_values = per_frequency_paired_ttest(orig_arr, recon_arr)
 
     # ---- Figures ------------------------------------------------------------
     print("\nGenerating figures ...")
@@ -280,9 +278,8 @@ def main() -> None:
     print(f"  Saved: {diff_path.name}")
 
     # ---- Console summary ----------------------------------------------------
-    log_orig = np.log10(np.maximum(orig_mean, _LOG_FLOOR))
-    log_recon = np.log10(np.maximum(recon_mean, _LOG_FLOOR))
-    log_diff = log_recon - log_orig  # positive → VAE over-produces energy
+    # Spectra are already in log10-power space (from compute_log_power_spectrum_2d).
+    log_diff = recon_mean - orig_mean  # positive → VAE over-produces energy
 
     n_sig = int((p_values < 0.05).sum())
     mean_abs_diff = float(np.mean(np.abs(log_diff[1:])))  # skip DC bin (index 0)

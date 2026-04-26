@@ -28,7 +28,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.spectral.io import compute_spectra
 from src.spectral.preprocessing import load_images_from_dir
-from src.spectral.fft import batch_power_spectra, average_power_spectrum_2d
+from src.spectral.fft import batch_power_spectra, average_power_spectrum_2d, batch_log_power_spectra
 from src.spectral.azimuthal import batch_azimuthal_average
 from src.spectral.statistics import population_stats
 from src.spectral.metrics import compute_all_metrics
@@ -114,8 +114,8 @@ def main() -> None:
         for method in degradation_methods:
             print(f"  Degrading images with method: {method}")
             deg_images = apply_degradation(real_images, method)
-            ps = batch_power_spectra(deg_images)
-            radial = batch_azimuthal_average(ps)
+            log_ps = batch_log_power_spectra(deg_images)
+            radial = batch_azimuthal_average(log_ps)
             degraded_spectra[method] = radial
     else:
         print("  No real images available; skipping degradation.")

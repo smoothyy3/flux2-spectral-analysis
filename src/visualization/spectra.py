@@ -15,12 +15,6 @@ from src.visualization.style import apply_style, get_color
 
 apply_style()
 
-# Floor at 1.0 so that zero-power bins display as log10(1)=0 rather than
-# log10(1e-12)=-12.  For 1024×1024 float64 images the DC bin is ~10^10 and
-# near-Nyquist bins can be exactly zero; a floor of 1.0 is below any
-# physically meaningful signal while preventing -inf/-12 spikes.
-_LOG_FLOOR = 1.0
-
 
 def plot_mean_spectra(
     group_spectra: dict[str, tuple[np.ndarray, np.ndarray]],
@@ -55,16 +49,11 @@ def plot_mean_spectra(
         color = get_color(group_name)
         freqs = np.arange(len(mean_spec))
 
-        if log_scale:
-            y_mean = np.log10(np.maximum(mean_spec, _LOG_FLOOR))
-            y_upper = np.log10(np.maximum(mean_spec + std_spec, _LOG_FLOOR))
-            # Symmetric-in-log lower bound: mirrors the upper band around the
-            # mean in log space, avoiding negative-clamp spikes when std≈mean.
-            y_lower = 2 * y_mean - y_upper
-        else:
-            y_mean = mean_spec
-            y_upper = mean_spec + std_spec
-            y_lower = mean_spec - std_spec
+        # Spectra are already in log10-power space; plot directly with
+        # symmetric ±1 std bands.
+        y_mean = mean_spec
+        y_upper = mean_spec + std_spec
+        y_lower = mean_spec - std_spec
 
         ax.plot(freqs, y_mean, label=group_name, color=color, linewidth=1.5)
         ax.fill_between(freqs, y_lower, y_upper, alpha=0.2, color=color)

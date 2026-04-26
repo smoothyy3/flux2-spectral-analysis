@@ -134,16 +134,16 @@ def main() -> None:
                 f"F1={result['f1_mean']:.3f}±{result['f1_std']:.3f}"
             )
 
-        # Fit final classifiers for feature importance and ROC curves
+        # ROC curves from out-of-fold predictions (unbiased, matches CV AUC).
         roc_data: dict[str, tuple[np.ndarray, np.ndarray, float]] = {}
-        classifiers_final = make_classifiers(random_seed=random_seed)
+        for clf_name, cv_res in cv_results.items():
+            fpr, tpr, _ = roc_curve(cv_res["oof_y_true"], cv_res["oof_y_proba"])
+            roc_data[clf_name] = (fpr, tpr, float(auc(fpr, tpr)))
 
+        # Fit final classifiers on full dataset for feature importance only.
+        classifiers_final = make_classifiers(random_seed=random_seed)
         for clf_name, clf in classifiers_final.items():
-            fitted_clf = fit_final_classifier(clf, X, y)
-            y_proba = fitted_clf.predict_proba(X)[:, 1]
-            fpr, tpr, _ = roc_curve(y, y_proba)
-            roc_auc = auc(fpr, tpr)
-            roc_data[clf_name] = (fpr, tpr, roc_auc)
+            fit_final_classifier(clf, X, y)
 
         # Figures
         plot_roc_curves(roc_data, figures_dir / "roc_curves.png")
@@ -166,7 +166,7 @@ def main() -> None:
         # Save per-model detection results
         detection_result = {
             "cv_results": cv_results,
-            "roc_auc_full": {
+            "roc_auc_oof": {
                 clf_name: float(roc_auc)
                 for clf_name, (_, _, roc_auc) in roc_data.items()
             },

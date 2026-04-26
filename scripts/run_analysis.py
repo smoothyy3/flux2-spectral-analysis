@@ -129,7 +129,7 @@ def main() -> None:
         }
         plot_band_energy_comparison(group_bands, figures_dir / "band_energy_comparison.png")
 
-        real_slope_val, _ = spectral_slope(real_mean)
+        real_slope_val, _ = spectral_slope(real_mean, bin_start=10, bin_end=400)
         group_slopes = {"real": real_slope_val, model_name: metrics["gen_slope"]}
         plot_spectral_slopes(group_slopes, figures_dir / "spectral_slope_comparison.png")
 

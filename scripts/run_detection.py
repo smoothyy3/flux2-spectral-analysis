@@ -163,9 +163,17 @@ def main() -> None:
         plot_feature_importance(lr_top, figures_dir / "feature_importance_lr.png",
                                 top_k=20, title=f"LR Coefficients — {group_name}")
 
+        # Strip numpy arrays before JSON serialization (oof arrays are only
+        # needed for the ROC computation above, not for persistence).
+        _ARRAY_KEYS = {"oof_y_true", "oof_y_proba"}
+        cv_results_serializable = {
+            clf_name: {k: v for k, v in res.items() if k not in _ARRAY_KEYS}
+            for clf_name, res in cv_results.items()
+        }
+
         # Save per-model detection results
         detection_result = {
-            "cv_results": cv_results,
+            "cv_results": cv_results_serializable,
             "roc_auc_oof": {
                 clf_name: float(roc_auc)
                 for clf_name, (_, _, roc_auc) in roc_data.items()

@@ -1,6 +1,6 @@
 # Spectral Forensic Characterization of FLUX.2 Image Generation Models
 
-This project applies azimuthal spectral averaging (Keuper et al., CVPR 2020) to FLUX.2 image generation models, comparing the radial power spectra of generated face images against 200 real FFHQ photographs. The main observation is that the LADD-trained distilled model produces spectrally near-identical output to real images (Δslope +0.016), while the MSE-trained base model does not at any tested inference setting (+0.195 to +0.693), and this difference persists when inference parameters are matched, suggesting the training objective, not inference configuration, is the primary factor.
+This project applies azimuthal spectral averaging (Keuper et al., CVPR 2020) to FLUX.2 image generation models, comparing the radial power spectra of generated face images against 200 real FFHQ photographs. The artifact is **opposite in direction to GANs**: FLUX produces a shallower log-log slope than real images (excess high-frequency power), whereas GAN-era models under-produced high frequencies. The LADD-trained distilled model sits closest to real (Δslope +0.072), while the MSE base model deviates more at any tested inference setting (+0.172 to +0.801). The fingerprint is highly consistent per-image despite being small in absolute magnitude — logistic regression AUC reaches 0.995 on clean same-domain data.
 
 ![2D Power Spectrum Comparison](results/controls/figures/2d_spectrum_comparison.png)
 *2D log-power spectra (|F(u,v)|², DC-centered) for real FFHQ images and three FLUX.2 model variants. The isotropic falloff confirms no directional grid artifacts.*
@@ -9,7 +9,7 @@ This project applies azimuthal spectral averaging (Keuper et al., CVPR 2020) to 
 
 ## Motivation
 
-Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the spectral distributions of real images. The artifact was characteristic: under-production of high-frequency content by orders of magnitude, attributable to transposed convolution checkerboard patterns. Modern rectified flow transformers (FLUX.2) use a fundamentally different architecture: patch-based vision transformers with rotary positional embeddings and a flow matching training objective. This project asks whether these models exhibit analogous spectral artifacts, and if so, how they differ from the GAN case.
+Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the spectral distributions of real images. The artifact was characteristic: massive under-production of high-frequency content (Δslope ≈ −1 to −3), attributable to transposed convolution checkerboard patterns. Modern rectified flow transformers (FLUX.2) use a fundamentally different architecture: patch-based vision transformers with rotary positional embeddings and a flow matching training objective. This project asks whether these models exhibit analogous spectral artifacts, and if so, how they differ from the GAN case.
 
 ---
 
@@ -18,10 +18,10 @@ Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the
 **Spectral pipeline (replicating Keuper et al.):**
 1. Convert images to grayscale (luminance channel)
 2. Compute 2D DFT via `np.fft.fft2`, shift DC to center with `np.fft.fftshift`
-3. Compute power spectrum: |F(u,v)|²
-4. Azimuthal average: for each integer radius r, average all power values at distance r from center. This produces a 1D spectrum of length 513 for 1024×1024 images
+3. Apply `log10(|F(u,v)|² + ε)` per pixel before any averaging — this is the Keuper order; averaging log-power per radial bin rather than taking the log of the averaged linear power
+4. Azimuthal average: for each integer radius r, mean of all log-power values at distance r from center. Produces a 1D spectrum of length 513 for 1024×1024 images
 5. Population statistics: mean and standard deviation across N images per group
-6. Spectral slope: log-log linear fit restricted to bins 10–400 (excludes DC and Nyquist edge)
+6. Spectral slope: log-log linear fit restricted to bins 10–400 (excludes DC and noisy near-Nyquist edge)
 
 **Reference dataset:** 200 randomly sampled FFHQ images at 1024×1024
 
@@ -42,47 +42,63 @@ Keuper et al. (CVPR 2020) showed that GAN-based generators fail to reproduce the
 
 ### Spectral Fingerprint
 
-FLUX-generated images exhibit a spectral fingerprint reversed from GANs: mid-frequency under-production (bins 50–250) and high-frequency over-production (bins 350–512). The effect magnitude is approximately 0.3–0.4 log₁₀ in power. These are orders of magnitude smaller than GAN-era artifacts documented by Keuper et al. The fingerprint is isotropic; no directional grid artifacts are present. A logistic regression classifier achieves 0.983 AUC (±0.014) on same-domain, uncompressed data.
+FLUX-generated images exhibit a spectral fingerprint **opposite in direction** to the GAN artifact documented by Keuper et al. GANs produce Δslope of −1 to −3 (massive HF under-production). FLUX produces positive Δslopes of +0.07 to +0.33 — slopes shallower than real, meaning **excess high-frequency power**. The effect magnitude is roughly two orders of magnitude smaller than GAN-era artifacts.
+
+The signed-difference plots show a consistent W-shaped pattern: mild over-production at low bins (~0–80), significant under-production in the mid-band (~100–230), and monotonically growing over-production from bin ~240 to Nyquist (peak ≈ +0.3–0.6 log₁₀ power). Band energies confirm: high-band mean log-power gen vs. real is 2.007 vs. 1.598 (distilled) and 2.081 vs. 1.598 (FLUX.2 Max). The fingerprint is isotropic; no directional grid artifacts are present.
+
+| Model | n | Δslope | KL | Wass | LR AUC (OOF) |
+|---|---|---|---|---|---|
+| Klein 4B Distilled (LADD, g=1, s=4) | 200 | **+0.072** | 1.52e-4 | 4.23e-3 | 0.995 |
+| Klein 4B Base (MSE, g=4, s=50) | 41 | **+0.172** | 4.42e-4 | 5.11e-3 | 0.984 |
+| FLUX.2 Max | 20 | **+0.333** | 3.38e-4 | 2.57e-3 | — |
+
+*Real image slope: −2.978. All Δslopes are gen_slope − real_slope.*
+
+Despite KL/Wasserstein distances of 10⁻⁴–10⁻³, LR AUC saturates at 0.98–1.00, meaning the fingerprint is **per-image consistent**: a small linear classifier on the raw 1D radial spectrum separates real from FLUX with near-perfect reliability within this evaluation set.
 
 ### VAE Isolation
 
-The VAE round-trip experiment (n=20) produces zero statistically significant frequency bins (p < 0.05) across all 513 bins using a paired t-test. Mean absolute deviation: 0.015 log₁₀. The VAE decoder introduces no detectable spectral shift at this sample size; the fingerprint originates in the flow-matching denoising process.
+The VAE round-trip experiment (n=20) produces **0/513 statistically significant frequency bins** (p < 0.05, paired t-test). Mean absolute log-power deviation: 0.0154. A small slope drift (+0.015) is only detectable past bin ~450 and is two orders of magnitude smaller than the full-generation artifact. The VAE decoder introduces no detectable spectral shift at this sample size; the fingerprint originates in the **flow-matching denoising process**.
 
 ![VAE Round-trip Spectral Difference](results/vae_roundtrip/figures/difference.png)
-*Encoding and decoding 50 real images through the FLUX VAE produces no statistically significant spectral deviation. The difference signal is indistinguishable from noise across all 513 frequency bins.*
+*Encoding and decoding 20 real images through the FLUX VAE produces no statistically significant spectral deviation. The difference signal is indistinguishable from noise across all 513 frequency bins.*
 
 ### Degradation Controls
 
-| Condition | Δ slope vs. real |
-|---|---|
-| JPEG Q85 | −0.015 |
-| Downscale 512→1024 | −0.643 |
-| Gaussian blur σ=1.5 | −0.806 |
-| Klein Distilled | +0.016 |
-| Klein Base g=4.0 s=50 | +0.195 |
-| FLUX.2 Max | +0.223 |
+| Condition | gen/deg slope | Δ slope vs. real |
+|---|---|---|
+| JPEG Q85 | −3.01 | −0.03 |
+| Downscale 512→1024 | −4.01 | −1.03 |
+| Gaussian blur σ=1.5 | −5.14 | −2.16 |
+| Klein Distilled | −2.907 | **+0.072** |
+| Klein Base g=4.0 s=50 | −2.807 | **+0.172** |
+| FLUX.2 Max | −2.646 | **+0.333** |
 
-Degradations push spectral slope steeper (less high-frequency content). FLUX generation pushes it shallower (more high-frequency content). These are opposite effects: the FLUX fingerprint is not a quality artifact.
+*Real image slope: −2.978.*
+
+All three degradations steepen the slope (remove high-frequency content). FLUX generation shallows the slope (adds high-frequency content relative to real). These are opposite effects: the FLUX fingerprint cannot be explained by any classical degradation artifact. Notably, JPEG Q85 alone shifts the slope by −0.03, which is comparable in magnitude to the distilled model's Δslope of +0.072 — the two effects partially cancel, making the fingerprint fragile to a single re-encode.
 
 ### Guidance × Steps Ablation
 
 | Condition | Training | Steps | Guidance | n | Δ Slope |
 |---|---|---|---|---|---|
-| Distilled | LADD | 4 | 1.0 | 200 | +0.016 |
-| Base A | MSE | 50 | 4.0 | 41 | +0.195 |
-| Base B | MSE | 50 | 1.0 | 19 | +0.316 |
-| Base D | MSE | 4 | 1.0 | 56 | +0.693 |
+| Distilled | LADD | 4 | 1.0 | 200 | +0.072 |
+| Base A | MSE | 50 | 4.0 | 41 | +0.172 |
+| Base B | MSE | 50 | 1.0 | 19 | +0.352 |
+| Base D | MSE | 4 | 1.0 | 56 | +0.801 |
 
-**Guidance does not explain the distilled model's spectral realism.** Lowering guidance from 4.0 to 1.0 on the base model increases the spectral deviation (+0.195 → +0.316), not decreases it.
+**More inference steps reduce the artifact.** At g=1.0, increasing steps from 4 to 50 reduces Δslope from +0.801 to +0.352 (D→B). Under-converged sampling injects excess HF noise.
 
-**LADD training is the remaining candidate.** At matched inference settings (g=1.0, s=4), the base model shows a 44× larger slope deviation than the distilled model. However, this comparison is confounded: the base model produces degraded images at 4 steps (outside its design parameters), so the training objective effect cannot be cleanly separated from image quality degradation.
+**Higher guidance also reduces the artifact.** At s=50, raising guidance from 1.0 to 4.0 reduces Δslope from +0.352 to +0.172 (B→A). Higher CFG likely flattens high-frequency stochastic content. Confound: g=4.0 also introduces visible oversharpening.
+
+**LADD training is the strongest candidate for spectral realism.** At matched inference settings (g=1.0, s=4), distilled Δ=+0.072 vs. base Δ=+0.801 — an **11× reduction**. However, this comparison is confounded: the base model produces visibly degraded images at 4 steps (it was trained for 50+ steps with MSE), so training objective and image quality degradation cannot be cleanly separated with the available models.
 
 ![Grid Spectral Difference Panel](results/grid_ablation/figures/grid_spectral_difference_panel.png)
-*Signed spectral differences across three inference conditions. Left: Base at 50 steps (smooth W-shape). Centre: Base at 4 steps (severe instability, wild high-frequency spikes). Right: Distilled LADD at 4 steps (near-flat, Δ≈0).*
+*Signed spectral differences across inference conditions. Base at 50 steps: smooth W-shape. Base at 4 steps: severe deviation, large HF excess. Distilled LADD at 4 steps: near-flat, Δ≈0.*
 
 ### FLUX.2 Max
 
-The fingerprint persists in BFL's flagship model (Δslope +0.223, n=20). The shape differs — Max shows deeper mid-frequency under-production as its dominant feature. Small sample size limits interpretive weight.
+The fingerprint persists in BFL's flagship model (Δslope +0.333, n=20), making it the largest deviation of the three models tested. The shape differs from the base model — Max shows deeper mid-frequency under-production as its dominant feature. Small sample size limits interpretive weight.
 
 ---
 
@@ -90,20 +106,21 @@ The fingerprint persists in BFL's flagship model (Δslope +0.223, n=20). The sha
 
 - **Undisclosed training data.** FLUX training data composition is unknown. Spectral differences may partly reflect training distribution mismatch with FFHQ rather than architectural properties.
 - **Cross-distribution comparison.** Unlike Keuper et al., where GANs were trained on the reference dataset, FLUX was not (or may not have been) trained on FFHQ.
-- **Small sample sizes** for base model conditions (n=19–56) and FLUX.2 Max (n=20).
+- **Small sample sizes** for base model conditions (n=19–56) and FLUX.2 Max (n=20). Only the distilled measurement (n=200) is statistically well-resourced.
 - **Prompt conditioning confound.** Text-guided generation may introduce spectral biases absent in unconditional generation.
-- **Detection on clean lab data only.** Robustness to JPEG, resizing, and social media pipelines is untested. The high-frequency bins where the fingerprint concentrates are the first destroyed by compression.
-- **LADD isolation confounded by image quality.** The base model at 4 steps produces degraded output. The training objective effect and image quality effect are inseparable with available models.
-- **Effect magnitude is small.** At 0.3–0.4 log₁₀, the fingerprint is near the threshold where content variation and post-processing could mask it.
+- **JPEG robustness.** JPEG Q85 shifts the slope by −0.03, comparable in magnitude to the distilled model's Δslope of +0.072. A single re-encode through the standard web image pipeline could plausibly suppress or reverse the fingerprint for the closest-to-real models.
+- **LADD isolation confounded by image quality.** The base model at 4 steps produces degraded output. The training objective effect and image quality degradation are inseparable with available models.
+- **VAE experiment underpowered.** n=20 with a paired test rules out large effects; a subtle systematic shift below the detection threshold cannot be excluded.
+- **No architectural decomposition.** The VAE is excluded as a source, but the flow-matching denoiser is not further decomposed. Which component — transformer blocks, RoPE embeddings, noise schedule, or training objective — produces the HF excess is unknown.
 
 ---
 
 ## Directions Not Pursued
 
 - **Stable Diffusion 3 comparison:** Would test cross-architecture generality (SD3 shares the MM-DiT family and uses LADD). Deferred due to generation cost — better suited for thesis-scale work.
-- **Social media robustness:** The fingerprint concentrates in high-frequency bins that JPEG and downscaling destroy first. The expected outcome is predictable.
+- **Social media robustness:** The fingerprint concentrates in high-frequency bins that JPEG and downscaling destroy first. Given that JPEG Q85 already shifts slope by −0.03 (comparable to the distilled model's Δ), robustness is expected to be poor.
 - **Directional anisotropy analysis:** RoPE and patch tokenization may create directional biases invisible to azimuthal averaging. Infrastructure exists (`src/controls/directional.py`) but this is a separate investigation.
-- **Extended classifier development:** The 0.983 AUC on controlled data is an expected baseline. Improving it does not advance understanding of the phenomenon.
+- **Extended classifier development:** The 0.995 AUC on controlled data is an expected baseline. Improving it does not advance understanding of the phenomenon.
 
 ---
 
@@ -120,7 +137,7 @@ flux/
 │       ├── klein_base_g1_s50/         # ~19 images (MSE, s=50, g=1.0)
 │       ├── klein_base_g1_s4/          # ~56 images (MSE, s=4, g=1.0)
 │       ├── flux2_max/                 # ~20 images (BFL Playground)
-│       └── vae_roundtrip/             # 50 VAE encode-decode reconstructions
+│       └── vae_roundtrip/             # 20 VAE encode-decode reconstructions
 ├── src/
 │   ├── spectral/                      # FFT, azimuthal averaging, metrics, stats
 │   ├── detection/                     # Feature extraction, classifiers with CV
@@ -147,8 +164,11 @@ flux/
 
 ```bash
 # Install
-pip install numpy scipy scikit-learn matplotlib seaborn pillow pyyaml tqdm
+pip install numpy scipy scikit-learn matplotlib pillow pyyaml tqdm
 pip install torch diffusers transformers accelerate  # for generation only
+
+# Reference dataset (downloads from HuggingFace)
+python scripts/sample_ffhq.py
 
 # Per-model analysis
 python scripts/run_analysis.py --model klein_distilled

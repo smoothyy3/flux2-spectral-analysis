@@ -33,5 +33,126 @@
           "roc_auc": 0.9868750000000001,
           "f1": 0.9624941397093296
         }
-      ],
-      "oof_y_true": 
+      ]
+    },
+    "svm_rbf": {
+      "accuracy_mean": 0.9424999999999999,
+      "accuracy_std": 0.020310096011589906,
+      "roc_auc_mean": 0.99175,
+      "roc_auc_std": 0.006607287643201265,
+      "f1_mean": 0.9423758055744802,
+      "f1_std": 0.020389652272382253,
+      "fold_results": [
+        {
+          "accuracy": 0.9125,
+          "roc_auc": 0.990625,
+          "f1": 0.912156862745098
+        },
+        {
+          "accuracy": 0.9625,
+          "roc_auc": 1.0,
+          "f1": 0.9624471913628541
+        },
+        {
+          "accuracy": 0.925,
+          "roc_auc": 0.99375,
+          "f1": 0.9249530956848031
+        },
+        {
+          "accuracy": 0.9625,
+          "roc_auc": 0.98,
+          "f1": 0.9624471913628541
+        },
+        {
+          "accuracy": 0.95,
+          "roc_auc": 0.994375,
+          "f1": 0.949874686716792
+        }
+      ]
+    },
+    "random_forest": {
+      "accuracy_mean": 0.9375,
+      "accuracy_std": 0.03354101966249684,
+      "roc_auc_mean": 0.9760625,
+      "roc_auc_std": 0.01245240940541222,
+      "f1_mean": 0.9373253418589613,
+      "f1_std": 0.033796476545497806,
+      "fold_results": [
+        {
+          "accuracy": 0.875,
+          "roc_auc": 0.9550000000000001,
+          "f1": 0.8742928975487115
+        },
+        {
+          "accuracy": 0.975,
+          "roc_auc": 0.9884375,
+          "f1": 0.9749843652282677
+        },
+        {
+          "accuracy": 0.95,
+          "roc_auc": 0.979375,
+          "f1": 0.9499687304565353
+        },
+        {
+          "accuracy": 0.9375,
+          "roc_auc": 0.9700000000000001,
+          "f1": 0.9374119856047567
+        },
+        {
+          "accuracy": 0.95,
+          "roc_auc": 0.9874999999999999,
+          "f1": 0.9499687304565353
+        }
+      ]
+    }
+  },
+  "roc_auc_oof": {
+    "logistic_regression": 0.99285,
+    "svm_rbf": 0.990925,
+    "random_forest": 0.9758875
+  },
+  "rf_top_features": [
+    "spectrum_bin_123",
+    "spectrum_bin_127",
+    "spectrum_bin_122",
+    "spectrum_bin_126",
+    "spectrum_bin_119",
+    "spectrum_bin_124",
+    "spectrum_bin_121",
+    "spectrum_bin_125",
+    "spectrum_bin_117",
+    "spectrum_bin_115",
+    "spectrum_bin_002",
+    "spectrum_bin_110",
+    "spectrum_bin_114",
+    "spectrum_bin_113",
+    "spectrum_bin_120",
+    "spectrum_bin_112",
+    "spectrum_bin_004",
+    "spectrum_bin_116",
+    "spectrum_bin_003",
+    "band_energy_high"
+  ],
+  "lr_top_features": [
+    "spectrum_bin_127",
+    "spectrum_bin_126",
+    "spectrum_bin_125",
+    "spectrum_bin_124",
+    "spectrum_bin_123",
+    "band_energy_mid",
+    "spectrum_bin_122",
+    "spectrum_bin_121",
+    "spectral_intercept",
+    "spectrum_bin_120",
+    "band_energy_high",
+    "spectrum_bin_119",
+    "spectrum_bin_118",
+    "spectrum_bin_117",
+    "spectrum_bin_116",
+    "spectrum_bin_115",
+    "spectrum_bin_114",
+    "spectrum_bin_113",
+    "spectral_slope",
+    "spectrum_bin_112"
+  ]
+}
